@@ -1,0 +1,162 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User account information and verification status.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "displayName": { "type": "string", "description": "Full name" },
+        "email": { "type": "string", "format": "email", "description": "Email address" },
+        "photoURL": { "type": "string", "format": "uri", "description": "Profile picture URL" },
+        "phoneNumber": { "type": "string", "description": "Verified phone number" },
+        "isVerified": { "type": "boolean", "description": "Whether the phone number is verified" },
+        "role": { "type": "string", "enum": ["user", "admin"], "description": "User role" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Account creation date" }
+      },
+      "required": ["uid", "displayName", "email"]
+    },
+    "Property": {
+      "title": "Property Listing",
+      "description": "A property for sale or rent.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique property ID" },
+        "ownerUid": { "type": "string", "description": "UID of the owner/poster" },
+        "ownerName": { "type": "string", "description": "Name of the property owner (denormalized)" },
+        "ownerPhoto": { "type": "string", "description": "Photo URL of the property owner (denormalized)" },
+        "title": { "type": "string", "description": "Property title" },
+        "description": { "type": "string", "description": "Property description" },
+        "price": { "type": "number", "description": "Price in MZN" },
+        "type": { "type": "string", "enum": ["venda", "aluguel_mensal", "aluguel_diario"], "description": "Listing type" },
+        "category": { "type": "string", "enum": ["casa", "quarto", "terreno", "escritorio"], "description": "Property category" },
+        "city": { "type": "string", "description": "City in Mozambique" },
+        "bedrooms": { "type": "number", "description": "Number of bedrooms" },
+        "bathrooms": { "type": "number", "description": "Number of bathrooms" },
+        "area": { "type": "number", "description": "Property area in square meters" },
+        "location": {
+          "type": "object",
+          "properties": {
+            "lat": { "type": "number" },
+            "lng": { "type": "number" }
+          }
+        },
+        "images": { "type": "array", "items": { "type": "string" }, "description": "List of image URLs" },
+        "videoUrl": { "type": "string", "format": "uri", "description": "Video URL for the property" },
+        "features": { "type": "array", "items": { "type": "string" }, "description": "List of property features" },
+        "status": { "type": "string", "enum": ["active", "sold", "rented", "pending"], "description": "Listing status" },
+        "isFeatured": { "type": "boolean", "description": "Whether the listing is featured" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerUid", "title", "price", "type", "category", "city"]
+    },
+    "Booking": {
+      "title": "Property Booking",
+      "description": "A booking for a short-term rental.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "propertyId": { "type": "string" },
+        "tenantUid": { "type": "string" },
+        "ownerUid": { "type": "string" },
+        "startDate": { "type": "string", "format": "date-time" },
+        "endDate": { "type": "string", "format": "date-time" },
+        "totalAmount": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "confirmed", "cancelled", "completed"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["propertyId", "tenantUid", "ownerUid", "startDate", "endDate", "totalAmount"]
+    },
+    "Review": {
+      "title": "User Review",
+      "description": "A review for a property or owner.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "targetId": { "type": "string", "description": "ID of property or UID of user being reviewed" },
+        "authorUid": { "type": "string" },
+        "rating": { "type": "integer", "minimum": 1, "maximum": 5 },
+        "comment": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["targetId", "authorUid", "rating"]
+    },
+    "Favorite": {
+      "title": "User Favorite",
+      "description": "A property favorited by a user.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "propertyId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "propertyId"]
+    },
+    "SavedSearch": {
+      "title": "Saved Search",
+      "description": "A search criteria saved by a user to receive notifications.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "criteria": {
+          "type": "object",
+          "properties": {
+            "q": { "type": "string" },
+            "type": { "type": "string" },
+            "category": { "type": "string" },
+            "city": { "type": "string" },
+            "minPrice": { "type": "number" },
+            "maxPrice": { "type": "number" }
+          }
+        },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "name", "criteria"]
+    },
+    "Notification": {
+      "title": "User Notification",
+      "description": "A notification sent to a user.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "uid": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "link": { "type": "string" },
+        "isRead": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "title", "message", "isRead"]
+    },
+    "Report": {
+      "title": "Property Report",
+      "description": "A report about a property listing.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "propertyId": { "type": "string" },
+        "propertyTitle": { "type": "string" },
+        "reason": { "type": "string" },
+        "description": { "type": "string" },
+        "reporterUid": { "type": "string" },
+        "reporterEmail": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "reviewed", "resolved"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["propertyId", "reason", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": { "schema": "User", "description": "User profiles" },
+    "/properties/{propertyId}": { "schema": "Property", "description": "Property listings" },
+    "/bookings/{bookingId}": { "schema": "Booking", "description": "Rental bookings" },
+    "/reviews/{reviewId}": { "schema": "Review", "description": "User reviews" },
+    "/users/{uid}/favorites/{favoriteId}": { "schema": "Favorite", "description": "User's favorite properties" },
+    "/saved_searches/{searchId}": { "schema": "SavedSearch", "description": "User's saved searches" },
+    "/users/{uid}/notifications/{notificationId}": { "schema": "Notification", "description": "User's notifications" },
+    "/reports/{reportId}": { "schema": "Report", "description": "Property reports" }
+  }
+}

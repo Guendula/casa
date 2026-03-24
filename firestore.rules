@@ -1,0 +1,241 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: uid
+    // Fields:
+    //   - uid: string (required) - Firebase Auth UID
+    //   - displayName: string (required) - Full name
+    //   - email: string (required, email format) - Email address
+    //   - photoURL: string (optional, uri format) - Profile picture URL
+    //   - phoneNumber: string (optional) - Verified phone number
+    //   - isVerified: boolean (optional) - Whether the phone number is verified
+    //   - role: string (optional, enum: ['user', 'admin']) - User role
+    //   - createdAt: timestamp (optional) - Account creation date
+    //
+    // Collection: properties
+    // Document ID: propertyId
+    // Fields:
+    //   - ownerUid: string (required) - UID of the owner/poster
+    //   - title: string (required) - Property title
+    //   - description: string (optional) - Property description
+    //   - price: number (required) - Price in MZN
+    //   - type: string (required, enum: ['venda', 'aluguel_mensal', 'aluguel_diario']) - Listing type
+    //   - category: string (required, enum: ['casa', 'quarto', 'terreno', 'escritorio']) - Property category
+    //   - city: string (required) - City in Mozambique
+    //   - location: map (optional) - { lat: number, lng: number }
+    //   - images: list (optional) - List of image URLs
+    //   - features: list (optional) - List of property features
+    //   - status: string (optional, enum: ['active', 'sold', 'rented', 'pending']) - Listing status
+    //   - isFeatured: boolean (optional) - Whether the listing is featured
+    //   - createdAt: timestamp (optional)
+    //   - updatedAt: timestamp (optional)
+    //
+    // Collection: bookings
+    // Document ID: bookingId
+    // Fields:
+    //   - propertyId: string (required)
+    //   - tenantUid: string (required)
+    //   - ownerUid: string (required)
+    //   - startDate: timestamp (required)
+    //   - endDate: timestamp (required)
+    //   - totalAmount: number (required)
+    //   - status: string (required, enum: ['pending', 'confirmed', 'cancelled', 'completed'])
+    //   - createdAt: timestamp (optional)
+    //
+    // Collection: reviews
+    // Document ID: reviewId
+    // Fields:
+    //   - targetId: string (required) - ID of property or UID of user being reviewed
+    //   - authorUid: string (required)
+    //   - rating: integer (required, 1-5)
+    //   - comment: string (optional)
+    //   - createdAt: timestamp (optional)
+    //
+    // Collection: saved_searches
+    // Document ID: searchId
+    // Fields:
+    //   - uid: string (required)
+    //   - name: string (required)
+    //   - criteria: map (required)
+    //   - createdAt: timestamp (optional)
+    //
+    // Collection: notifications
+    // Document ID: notificationId
+    // Fields:
+    //   - uid: string (required)
+    //   - title: string (required)
+    //   - message: string (required)
+    //   - link: string (optional)
+    //   - isRead: boolean (required)
+    //   - createdAt: timestamp (optional)
+    //
+    // Collection: reports
+    // Document ID: reportId
+    // Fields:
+    //   - propertyId: string (required)
+    //   - propertyTitle: string (optional)
+    //   - reason: string (required)
+    //   - description: string (optional)
+    //   - reporterUid: string (optional)
+    //   - reporterEmail: string (optional)
+    //   - status: string (required, enum: ['pending', 'reviewed', 'resolved'])
+    //   - createdAt: timestamp (optional)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.ownerUid;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "arinoeugenio@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'displayName', 'email']) &&
+             data.uid == request.auth.uid &&
+             data.displayName is string && data.displayName.size() > 0 && data.displayName.size() < 100 &&
+             isValidEmail(data.email) &&
+             (!('role' in data) || data.role in ['user', 'admin']);
+    }
+
+    function isValidProperty(data) {
+      return data.keys().hasAll(['ownerUid', 'title', 'price', 'type', 'category', 'city']) &&
+             data.ownerUid == request.auth.uid &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.price is number && data.price >= 0 &&
+             data.type in ['venda', 'aluguel_mensal', 'aluguel_diario'] &&
+             data.category in ['casa', 'quarto', 'terreno', 'escritorio'] &&
+             data.city is string && data.city.size() > 0 && data.city.size() < 100 &&
+             (!('images' in data) || data.images is list) &&
+             (!('ownerName' in data) || (data.ownerName is string && data.ownerName.size() < 100)) &&
+             (!('ownerPhoto' in data) || (data.ownerPhoto is string && data.ownerPhoto.size() < 500)) &&
+             (!('isBoosted' in data) || data.isBoosted is bool) &&
+             (!('bedrooms' in data) || data.bedrooms is number) &&
+             (!('bathrooms' in data) || data.bathrooms is number) &&
+             (!('area' in data) || data.area is number) &&
+             (!('status' in data) || data.status in ['active', 'sold', 'rented', 'pending']);
+    }
+
+    function isValidBooking(data) {
+      return data.keys().hasAll(['propertyId', 'tenantUid', 'ownerUid', 'startDate', 'endDate', 'totalAmount', 'status']) &&
+             data.tenantUid == request.auth.uid &&
+             data.totalAmount is number && data.totalAmount >= 0 &&
+             data.status in ['pending', 'confirmed', 'cancelled', 'completed'];
+    }
+
+    function isValidReview(data) {
+      return data.keys().hasAll(['targetId', 'authorUid', 'rating']) &&
+             data.authorUid == request.auth.uid &&
+             data.rating is int && data.rating >= 1 && data.rating <= 5 &&
+             (!('comment' in data) || (data.comment is string && data.comment.size() < 1000));
+    }
+
+    function isValidSavedSearch(data) {
+      return data.keys().hasAll(['uid', 'name', 'criteria']) &&
+             data.uid == request.auth.uid &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.criteria is map;
+    }
+
+    function isValidNotification(data) {
+      return data.keys().hasAll(['uid', 'title', 'message', 'isRead']) &&
+             data.uid == request.auth.uid &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.message is string && data.message.size() > 0 && data.message.size() < 1000 &&
+             data.isRead is bool;
+    }
+
+    function isValidReport(data) {
+      return data.keys().hasAll(['propertyId', 'reason', 'status']) &&
+             data.propertyId is string &&
+             data.reason is string && data.reason.size() > 0 && data.reason.size() < 200 &&
+             data.status in ['pending', 'reviewed', 'resolved'] &&
+             (!('propertyTitle' in data) || (data.propertyTitle is string && data.propertyTitle.size() < 300)) &&
+             (!('description' in data) || (data.description is string && data.description.size() < 2000)) &&
+             (!('reporterUid' in data) || data.reporterUid is string) &&
+             (!('reporterEmail' in data) || data.reporterEmail is string);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow create: if isAuthenticated() && isValidUser(request.resource.data);
+      allow update: if isAuthenticated() && (isOwner(uid) || isAdmin()) && isValidUser(request.resource.data);
+      allow delete: if isAdmin();
+
+      match /favorites/{favoriteId} {
+        allow read: if isOwner(uid);
+        allow write: if isOwner(uid);
+      }
+
+      match /notifications/{notificationId} {
+        allow read: if isOwner(uid);
+        allow create: if isAuthenticated(); // Allow others to create notifications for this user
+        allow update: if isOwner(uid) && isValidNotification(request.resource.data);
+        allow delete: if isOwner(uid);
+      }
+    }
+
+    match /saved_searches/{searchId} {
+      allow read: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && isValidSavedSearch(request.resource.data);
+      allow update: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin()) && isValidSavedSearch(request.resource.data);
+      allow delete: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin());
+    }
+
+    match /properties/{propertyId} {
+      allow read: if true; // Publicly readable
+      allow create: if isAuthenticated() && isValidProperty(request.resource.data);
+      allow update: if isAuthenticated() && (isDocOwner() || isAdmin()) && isValidProperty(request.resource.data);
+      allow delete: if isAuthenticated() && (isDocOwner() || isAdmin());
+    }
+
+    match /bookings/{bookingId} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.tenantUid || request.auth.uid == resource.data.ownerUid || isAdmin());
+      allow create: if isAuthenticated() && isValidBooking(request.resource.data);
+      allow update: if isAuthenticated() && (request.auth.uid == resource.data.tenantUid || request.auth.uid == resource.data.ownerUid || isAdmin()) && isValidBooking(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && isValidReview(request.resource.data);
+      allow update: if isAuthenticated() && (request.auth.uid == resource.data.authorUid || isAdmin()) && isValidReview(request.resource.data);
+      allow delete: if isAuthenticated() && (request.auth.uid == resource.data.authorUid || isAdmin());
+    }
+
+    match /reports/{reportId} {
+      allow read: if isAdmin();
+      allow create: if true; // Allow anyone to report, even anonymous
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+  }
+}
