@@ -36,6 +36,12 @@ export default function Profile({ user }: ProfileProps) {
   const [inputCode, setInputCode] = useState('');
   const [isPhoneVerified, setIsPhoneVerified] = useState(user?.isVerified || false);
 
+  // Email Verification State
+  const [isEmailVerifying, setIsEmailVerifying] = useState(false);
+  const [showEmailCodeInput, setShowEmailCodeInput] = useState(false);
+  const [emailInputCode, setEmailInputCode] = useState('');
+  const [isEmailVerified, setIsEmailVerified] = useState(user?.isEmailVerified || false);
+
   useEffect(() => {
     if (!user) {
       navigate('/');
@@ -92,6 +98,59 @@ export default function Profile({ user }: ProfileProps) {
       // In a real app, this would be sent via SMS
       toast.info(`[SIMULAÇÃO] Código enviado: ${mockCode}`, { duration: 10000 });
     }, 1500);
+  };
+
+  const handleSendEmailCode = async () => {
+    if (!user?.email) return;
+    
+    setIsEmailVerifying(true);
+    try {
+      const response = await fetch('/api/verify-email/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: user.email, uid: user.uid }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Erro ao enviar email');
+      }
+
+      setShowEmailCodeInput(true);
+      toast.success('Código de verificação enviado para o seu email!');
+    } catch (error) {
+      console.error('Error sending email code:', error);
+      toast.error(error instanceof Error ? error.message : 'Erro ao enviar código.');
+    } finally {
+      setIsEmailVerifying(false);
+    }
+  };
+
+  const handleVerifyEmailCode = async () => {
+    if (!user || !emailInputCode) return;
+
+    setLoading(true);
+    try {
+      const response = await fetch('/api/verify-email/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uid: user.uid, code: emailInputCode }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Código inválido');
+      }
+
+      setIsEmailVerified(true);
+      setShowEmailCodeInput(false);
+      toast.success('Email verificado com sucesso!');
+    } catch (error) {
+      console.error('Error verifying email:', error);
+      toast.error(error instanceof Error ? error.message : 'Erro ao verificar código.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleVerifyCode = async () => {
@@ -203,15 +262,27 @@ export default function Profile({ user }: ProfileProps) {
               <h2 className="text-2xl font-bold text-gray-900">{user.displayName}</h2>
               <p className="text-gray-500 font-medium">{user.email}</p>
             </div>
-            <div className={cn(
-              "inline-flex items-center px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider",
-              user.isVerified ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
-            )}>
-              {user.isVerified ? (
-                <><ShieldCheck className="h-4 w-4 mr-2" /> Conta Verificada</>
-              ) : (
-                <><ShieldAlert className="h-4 w-4 mr-2" /> Não Verificada</>
-              )}
+            <div className="flex flex-col gap-2">
+              <div className={cn(
+                "inline-flex items-center px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider justify-center",
+                isEmailVerified ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+              )}>
+                {isEmailVerified ? (
+                  <><ShieldCheck className="h-4 w-4 mr-2" /> Email Verificado</>
+                ) : (
+                  <><ShieldAlert className="h-4 w-4 mr-2" /> Email Pendente</>
+                )}
+              </div>
+              <div className={cn(
+                "inline-flex items-center px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider justify-center",
+                isPhoneVerified ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+              )}>
+                {isPhoneVerified ? (
+                  <><ShieldCheck className="h-4 w-4 mr-2" /> Telefone Verificado</>
+                ) : (
+                  <><ShieldAlert className="h-4 w-4 mr-2" /> Telefone Pendente</>
+                )}
+              </div>
             </div>
           </div>
 
@@ -274,15 +345,69 @@ export default function Profile({ user }: ProfileProps) {
 
               <div className="space-y-2">
                 <label className="text-xs font-bold text-gray-500 uppercase">Email (Não editável)</label>
-                <div className="relative">
-                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-                  <input 
-                    type="email" 
-                    className="w-full pl-12 pr-4 py-4 bg-gray-100 rounded-xl border border-gray-100 text-gray-500 cursor-not-allowed"
-                    value={user.email}
-                    disabled
-                  />
+                <div className="flex gap-2">
+                  <div className="relative flex-grow">
+                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                    <input 
+                      type="email" 
+                      className={cn(
+                        "w-full pl-12 pr-4 py-4 bg-gray-100 rounded-xl border border-gray-100 text-gray-500 cursor-not-allowed",
+                        isEmailVerified && "bg-green-50 border-green-100 text-green-700"
+                      )}
+                      value={user.email}
+                      disabled
+                    />
+                    {isEmailVerified && (
+                      <CheckCircle2 className="absolute right-4 top-1/2 -translate-y-1/2 h-5 w-5 text-green-600" />
+                    )}
+                  </div>
+                  {!isEmailVerified && !showEmailCodeInput && (
+                    <button 
+                      type="button"
+                      onClick={handleSendEmailCode}
+                      disabled={isEmailVerifying}
+                      className="bg-gray-900 text-white px-6 rounded-xl font-bold text-sm hover:bg-gray-800 transition-all disabled:opacity-50 whitespace-nowrap"
+                    >
+                      {isEmailVerifying ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Verificar Email'}
+                    </button>
+                  )}
                 </div>
+
+                {showEmailCodeInput && !isEmailVerified && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mt-4 p-6 bg-blue-50 rounded-2xl border border-blue-100 space-y-4"
+                  >
+                    <div className="flex justify-between items-center">
+                      <p className="text-sm font-bold text-blue-900">Insira o código de 6 dígitos enviado ao seu email</p>
+                      <button 
+                        type="button" 
+                        onClick={() => setShowEmailCodeInput(false)}
+                        className="text-gray-400 hover:text-gray-600"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <div className="flex gap-2">
+                      <input 
+                        type="text" 
+                        maxLength={6}
+                        placeholder="000000"
+                        className="flex-grow p-4 bg-white rounded-xl border border-blue-200 focus:ring-2 focus:ring-blue-500 focus:outline-none text-center text-2xl font-black tracking-widest"
+                        value={emailInputCode}
+                        onChange={(e) => setEmailInputCode(e.target.value.replace(/\D/g, ''))}
+                      />
+                      <button 
+                        type="button"
+                        onClick={handleVerifyEmailCode}
+                        className="bg-blue-600 text-white px-8 rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200"
+                      >
+                        Validar
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
               </div>
 
               <div className="space-y-2">

@@ -7,6 +7,7 @@ export interface UserProfile {
   photoURL?: string;
   phoneNumber?: string;
   isVerified?: boolean;
+  isEmailVerified?: boolean;
   role?: UserRole;
   socialMedia?: {
     /** Facebook profile URL (e.g., https://facebook.com/username) */

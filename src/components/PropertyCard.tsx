@@ -2,8 +2,8 @@ import { Link } from 'react-router-dom';
 import { MapPin, Bed, Bath, Square, Heart, Star, Zap, Edit2, Trash2, CheckCircle2, Home } from 'lucide-react';
 import { Property, PropertyStatus } from '../types';
 import { formatCurrency, cn } from '../lib/utils';
-import { useState } from 'react';
-import { motion } from 'motion/react';
+import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface PropertyCardProps {
   property: Property;
@@ -25,6 +25,23 @@ export default function PropertyCard({
   onStatusChange
 }: PropertyCardProps) {
   const [isHovered, setIsHovered] = useState(false);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+
+  const images = property.images && property.images.length > 0 
+    ? property.images 
+    : ['https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&w=800&q=80'];
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isHovered && images.length > 1) {
+      interval = setInterval(() => {
+        setCurrentImageIndex((prev) => (prev + 1) % images.length);
+      }, 2000);
+    } else {
+      setCurrentImageIndex(0);
+    }
+    return () => clearInterval(interval);
+  }, [isHovered, images.length]);
 
   const typeLabel = {
     venda: 'Venda',
@@ -67,15 +84,34 @@ export default function PropertyCard({
       transition={{ duration: 0.3 }}
     >
       <Link to={`/imovel/${property.id}`} className="block relative aspect-[4/3] overflow-hidden">
-        <img 
-          src={property.images?.[0] || 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&w=800&q=80'} 
-          alt={property.title}
-          className={cn(
-            "w-full h-full object-cover transition-transform duration-500",
-            isHovered ? "scale-110" : "scale-100"
-          )}
-          referrerPolicy="no-referrer"
-        />
+        <AnimatePresence mode="wait">
+          <motion.img 
+            key={currentImageIndex}
+            src={images[currentImageIndex]} 
+            alt={property.title}
+            initial={{ opacity: 0, scale: 1.1 }}
+            animate={{ opacity: 1, scale: isHovered ? 1.15 : 1.1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.5 }}
+            className="w-full h-full object-cover"
+            referrerPolicy="no-referrer"
+          />
+        </AnimatePresence>
+
+        {/* Gallery Indicators */}
+        {images.length > 1 && isHovered && (
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
+            {images.map((_, idx) => (
+              <div 
+                key={idx}
+                className={cn(
+                  "h-1 rounded-full transition-all duration-300",
+                  idx === currentImageIndex ? "w-4 bg-white" : "w-1.5 bg-white/50"
+                )}
+              />
+            ))}
+          </div>
+        )}
         
         {/* Badges */}
         <div className="absolute top-3 left-3 flex flex-col gap-2">

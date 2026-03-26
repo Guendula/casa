@@ -25,18 +25,10 @@ export default function SearchResults() {
   const [showFilters, setShowFilters] = useState(false);
   const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
   const [hasMore, setHasMore] = useState(true);
+  const lastDocRef = useRef<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const hasMoreRef = useRef(true);
+  const loadingMoreRef = useRef(false);
   const observer = useRef<IntersectionObserver | null>(null);
-
-  const lastPropertyElementRef = useCallback((node: HTMLDivElement | null) => {
-    if (loading || loadingMore) return;
-    if (observer.current) observer.current.disconnect();
-    observer.current = new IntersectionObserver(entries => {
-      if (entries[0].isIntersecting && hasMore) {
-        fetchProperties(true);
-      }
-    });
-    if (node) observer.current.observe(node);
-  }, [loading, loadingMore, hasMore]);
 
   // Filter states
   const [type, setType] = useState(searchParams.get('type') || '');
@@ -46,21 +38,22 @@ export default function SearchResults() {
   const [maxPrice, setMaxPrice] = useState(searchParams.get('maxPrice') || '');
   const [sortBy, setSortBy] = useState(searchParams.get('sortBy') || 'recent');
 
-  useEffect(() => {
-    fetchProperties();
-  }, [searchParams, type, category, city, minPrice, maxPrice, sortBy]);
-
-  const fetchProperties = async (isLoadMore = false) => {
+  const fetchProperties = useCallback(async (isLoadMore = false) => {
     if (isLoadMore) {
+      if (loadingMoreRef.current || !hasMoreRef.current) return;
       setLoadingMore(true);
+      loadingMoreRef.current = true;
     } else {
       setLoading(true);
       setProperties([]);
       setLastDoc(null);
+      lastDocRef.current = null;
+      setHasMore(true);
+      hasMoreRef.current = true;
     }
 
     try {
-      const pageSize = 24;
+      const pageSize = 12;
       let q = query(
         collection(db, 'properties'),
         where('status', '==', 'active'),
@@ -68,19 +61,23 @@ export default function SearchResults() {
         limit(pageSize)
       );
 
-      if (isLoadMore && lastDoc) {
-        q = query(q, startAfter(lastDoc));
+      if (isLoadMore && lastDocRef.current) {
+        q = query(q, startAfter(lastDocRef.current));
       }
 
-      // Apply filters
+      // Apply server-side filters (Equality only)
       if (type) q = query(q, where('type', '==', type));
       if (category) q = query(q, where('category', '==', category));
       if (city) q = query(q, where('city', '==', city));
 
       const querySnap = await getDocs(q);
       const lastVisible = querySnap.docs[querySnap.docs.length - 1];
+      
+      const newHasMore = querySnap.docs.length === pageSize;
       setLastDoc(lastVisible || null);
-      setHasMore(querySnap.docs.length === pageSize);
+      lastDocRef.current = lastVisible || null;
+      setHasMore(newHasMore);
+      hasMoreRef.current = newHasMore;
 
       let results = querySnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Property));
 
@@ -114,13 +111,26 @@ export default function SearchResults() {
     } finally {
       setLoading(false);
       setLoadingMore(false);
+      loadingMoreRef.current = false;
     }
-  };
+  }, [searchParams, type, category, city, minPrice, maxPrice, sortBy]);
 
-  const loadMore = () => {
-    if (loadingMore || !hasMore) return;
-    fetchProperties(true);
-  };
+  useEffect(() => {
+    fetchProperties();
+  }, [searchParams, type, category, city, minPrice, maxPrice, sortBy, fetchProperties]);
+
+  const lastPropertyElementRef = useCallback((node: HTMLDivElement | null) => {
+    if (loading || loadingMore) return;
+    if (observer.current) observer.current.disconnect();
+    observer.current = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && hasMoreRef.current) {
+        fetchProperties(true);
+      }
+    }, {
+      rootMargin: '200px',
+    });
+    if (node) observer.current.observe(node);
+  }, [loading, loadingMore, fetchProperties]);
 
   const applyFilters = () => {
     const params = new URLSearchParams(searchParams);

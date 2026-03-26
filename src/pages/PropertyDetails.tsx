@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { doc, getDoc, collection, query, where, limit, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, limit, getDocs, addDoc, serverTimestamp, setDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Property, UserProfile, Booking } from '../types';
 import { formatCurrency, formatDate, cn } from '../lib/utils';
@@ -21,6 +21,8 @@ export default function PropertyDetails({ user }: PropertyDetailsProps) {
   const [activeImage, setActiveImage] = useState(0);
   const [bookingDates, setBookingDates] = useState({ start: '', end: '' });
   const [isBooking, setIsBooking] = useState(false);
+  const [isFavorited, setIsFavorited] = useState(false);
+  const [isFavoriteLoading, setIsFavoriteLoading] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -72,6 +74,54 @@ export default function PropertyDetails({ user }: PropertyDetailsProps) {
 
     fetchProperty();
   }, [id, navigate]);
+
+  useEffect(() => {
+    const checkFavoriteStatus = async () => {
+      if (!user || !id) return;
+      try {
+        const favRef = doc(db, 'users', user.uid, 'favorites', id);
+        const favSnap = await getDoc(favRef);
+        setIsFavorited(favSnap.exists());
+      } catch (error) {
+        console.error('Error checking favorite status:', error);
+      }
+    };
+
+    checkFavoriteStatus();
+  }, [user, id]);
+
+  const handleToggleFavorite = async () => {
+    if (!user) {
+      toast.error('Faça login para adicionar aos favoritos.');
+      return;
+    }
+
+    if (!property) return;
+
+    setIsFavoriteLoading(true);
+    try {
+      const favRef = doc(db, 'users', user.uid, 'favorites', property.id);
+      
+      if (isFavorited) {
+        await deleteDoc(favRef);
+        setIsFavorited(false);
+        toast.success('Removido dos favoritos');
+      } else {
+        await setDoc(favRef, {
+          uid: user.uid,
+          propertyId: property.id,
+          createdAt: serverTimestamp()
+        });
+        setIsFavorited(true);
+        toast.success('Adicionado aos favoritos');
+      }
+    } catch (error) {
+      console.error('Error toggling favorite:', error);
+      toast.error('Erro ao atualizar favoritos.');
+    } finally {
+      setIsFavoriteLoading(false);
+    }
+  };
 
   const handleBooking = async () => {
     if (!user) {
@@ -174,8 +224,17 @@ export default function PropertyDetails({ user }: PropertyDetailsProps) {
           >
             <Share2 className="h-5 w-5 text-gray-600" />
           </button>
-          <button className="p-2 bg-white rounded-full shadow-sm border border-gray-100 hover:bg-gray-50 transition-colors">
-            <Heart className="h-5 w-5 text-gray-600" />
+          <button 
+            onClick={handleToggleFavorite}
+            disabled={isFavoriteLoading}
+            className={cn(
+              "p-2 rounded-full shadow-sm border transition-all",
+              isFavorited 
+                ? "bg-red-50 border-red-100 text-red-600" 
+                : "bg-white border-gray-100 text-gray-600 hover:bg-gray-50"
+            )}
+          >
+            <Heart className={cn("h-5 w-5", isFavorited && "fill-current")} />
           </button>
         </div>
       </div>
@@ -282,14 +341,18 @@ export default function PropertyDetails({ user }: PropertyDetailsProps) {
               </a>
             </div>
 
-            <div className="pt-4 border-t border-gray-100">
+            <div className="relative group">
               <Link 
                 to={`/denunciar?id=${property.id}&title=${encodeURIComponent(property.title)}`}
-                className="flex items-center justify-center space-x-2 text-sm text-gray-400 hover:text-red-600 transition-colors font-medium"
+                className="w-full flex items-center justify-center space-x-2 bg-red-50 text-red-600 py-4 rounded-xl font-bold hover:bg-red-100 transition-all border border-red-100 shadow-sm"
               >
-                <AlertCircle className="h-4 w-4" />
-                <span>Denunciar este anúncio</span>
+                <AlertCircle className="h-5 w-5" />
+                <span>Denunciar Imóvel</span>
               </Link>
+              <div className="absolute -top-14 left-1/2 -translate-x-1/2 w-64 p-3 bg-gray-900 text-white text-[11px] leading-tight rounded-xl opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none z-20 text-center shadow-2xl border border-gray-800 transform translate-y-2 group-hover:translate-y-0">
+                Ajude-nos a manter a plataforma segura. Reporte anúncios falsos, duplicados ou com conteúdo impróprio.
+                <div className="absolute top-full left-1/2 -translate-x-1/2 border-[6px] border-transparent border-t-gray-900"></div>
+              </div>
             </div>
           </div>
 

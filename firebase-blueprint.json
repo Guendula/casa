@@ -147,6 +147,19 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["propertyId", "reason", "status"]
+    },
+    "VerificationCode": {
+      "title": "Verification Code",
+      "description": "A temporary code for email or phone verification.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "code": { "type": "string" },
+        "expiresAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "code", "expiresAt"]
     }
   },
   "firestore": {
@@ -157,6 +170,7 @@
     "/users/{uid}/favorites/{favoriteId}": { "schema": "Favorite", "description": "User's favorite properties" },
     "/saved_searches/{searchId}": { "schema": "SavedSearch", "description": "User's saved searches" },
     "/users/{uid}/notifications/{notificationId}": { "schema": "Notification", "description": "User's notifications" },
-    "/reports/{reportId}": { "schema": "Report", "description": "Property reports" }
+    "/reports/{reportId}": { "schema": "Report", "description": "Property reports" },
+    "/verification_codes/{codeId}": { "schema": "VerificationCode", "description": "Temporary verification codes" }
   }
 }
